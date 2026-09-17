@@ -1,4 +1,6 @@
 using BJJTrainingTracker.Models;
+using BJJTrainingTracker.Services;
+using System.Text.Json;
 
 namespace BJJTrainingTracker;
 
@@ -11,6 +13,8 @@ public class MainForm : Form
     private readonly TextBox techniquesInput = new();
     private readonly TextBox notesInput = new();
     private readonly ListBox sessionList = new();
+    private readonly JsonDataService dataService = new();
+    private List<TrainingSession> sessions = [];
 
     public MainForm()
     {
@@ -40,6 +44,8 @@ public class MainForm : Form
 
         Controls.Add(content);
         Controls.Add(titleLabel);
+
+        LoadSavedSessions();
     }
 
     private Control CreateSessionForm()
@@ -106,7 +112,7 @@ public class MainForm : Form
         var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18, 10, 0, 10) };
         var heading = new Label
         {
-            Text = "Sessions added today",
+            Text = "Saved sessions",
             AutoSize = true,
             Dock = DockStyle.Top,
             Font = new Font("Segoe UI", 13, FontStyle.Bold),
@@ -159,8 +165,53 @@ public class MainForm : Form
             (int)roundsInput.Value,
             notesInput.Text.Trim());
 
-        sessionList.Items.Add(session.GetSummary());
-        ClearForm();
+        sessions.Add(session);
+
+        try
+        {
+            dataService.SaveSessions(sessions);
+            sessionList.Items.Add(session.GetSummary());
+            ClearForm();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            sessions.Remove(session);
+            MessageBox.Show(
+                "The session could not be saved. " + ex.Message,
+                "Save error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void LoadSavedSessions()
+    {
+        try
+        {
+            sessions = dataService.LoadSessions();
+            foreach (var session in sessions.OrderByDescending(item => item.SessionDate))
+            {
+                sessionList.Items.Add(session.GetSummary());
+            }
+        }
+        catch (JsonException)
+        {
+            sessions = [];
+            MessageBox.Show(
+                "The saved training data could not be read because the file is invalid.",
+                "Data error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            sessions = [];
+            MessageBox.Show(
+                "The saved training data could not be loaded. " + ex.Message,
+                "Load error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     private void ClearForm()

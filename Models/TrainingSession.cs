@@ -1,12 +1,29 @@
+using System.Text.Json.Serialization;
+
 namespace BJJTrainingTracker.Models;
 
 public class TrainingSession : TrainingEntry
 {
-    public DateTime SessionDate { get; }
-    public string SessionType { get; }
-    public int DurationMinutes { get; }
-    public string Techniques { get; }
-    public int SparringRounds { get; }
+    [JsonInclude]
+    public DateTime SessionDate { get; private set; }
+
+    [JsonInclude]
+    public string SessionType { get; private set; }
+
+    [JsonInclude]
+    public int DurationMinutes { get; private set; }
+
+    [JsonInclude]
+    public string Techniques { get; private set; }
+
+    [JsonInclude]
+    public int SparringRounds { get; private set; }
+
+    public TrainingSession()
+    {
+        SessionType = string.Empty;
+        Techniques = string.Empty;
+    }
 
     public TrainingSession(
         DateTime sessionDate,
