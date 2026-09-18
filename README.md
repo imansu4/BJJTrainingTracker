@@ -10,14 +10,14 @@ BJJ Training Tracker is a C# Windows Forms application for recording training se
 - Required technique input is validated before a session is added
 - Sessions are saved to a local JSON file and restored when the application opens
 - Saved sessions are displayed in the session list
+- Existing sessions can be selected, edited and saved
+- Sessions can be deleted after a confirmation prompt
 - File access and invalid JSON errors are handled with clear messages
 - `TrainingSession` class extends the abstract `TrainingEntry` base class
 - Git and GitHub development workflow started
 
 ## Planned features
 
-- Edit and delete training sessions
-- Record techniques and sparring rounds
 - Search and filter training history
 - Generate a weekly summary
 - Manage active focus areas

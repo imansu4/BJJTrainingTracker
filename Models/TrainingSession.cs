@@ -45,4 +45,25 @@ public class TrainingSession : TrainingEntry
         return $"{SessionDate:dd MMM yyyy} | {SessionType} | " +
                $"{DurationMinutes} min | {SparringRounds} rounds | {Techniques}";
     }
+
+    public void Update(
+        DateTime sessionDate,
+        string sessionType,
+        int durationMinutes,
+        string techniques,
+        int sparringRounds,
+        string notes)
+    {
+        SessionDate = sessionDate;
+        SessionType = sessionType;
+        DurationMinutes = durationMinutes;
+        Techniques = techniques;
+        SparringRounds = sparringRounds;
+        Notes = notes;
+    }
+
+    public override string ToString()
+    {
+        return GetSummary();
+    }
 }

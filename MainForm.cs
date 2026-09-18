@@ -13,8 +13,11 @@ public class MainForm : Form
     private readonly TextBox techniquesInput = new();
     private readonly TextBox notesInput = new();
     private readonly ListBox sessionList = new();
+    private readonly Button updateButton = new();
+    private readonly Button deleteButton = new();
     private readonly JsonDataService dataService = new();
     private List<TrainingSession> sessions = [];
+    private Guid? selectedSessionId;
 
     public MainForm()
     {
@@ -99,10 +102,35 @@ public class MainForm : Form
             Text = "Save Session",
             AutoSize = true,
             Padding = new Padding(12, 6, 12, 6),
-            Margin = new Padding(3, 14, 3, 3)
+            Margin = new Padding(3)
         };
         saveButton.Click += SaveSession;
-        form.Controls.Add(saveButton, 1, 6);
+
+        updateButton.Text = "Update Selected";
+        updateButton.AutoSize = true;
+        updateButton.Padding = new Padding(12, 6, 12, 6);
+        updateButton.Margin = new Padding(3);
+        updateButton.Enabled = false;
+        updateButton.Click += UpdateSelectedSession;
+
+        deleteButton.Text = "Delete Selected";
+        deleteButton.AutoSize = true;
+        deleteButton.Padding = new Padding(12, 6, 12, 6);
+        deleteButton.Margin = new Padding(3);
+        deleteButton.Enabled = false;
+        deleteButton.Click += DeleteSelectedSession;
+
+        var buttonPanel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 14, 0, 0)
+        };
+        buttonPanel.Controls.Add(saveButton);
+        buttonPanel.Controls.Add(updateButton);
+        buttonPanel.Controls.Add(deleteButton);
+        form.Controls.Add(buttonPanel, 1, 6);
 
         return form;
     }
@@ -121,6 +149,7 @@ public class MainForm : Form
 
         sessionList.Dock = DockStyle.Fill;
         sessionList.HorizontalScrollbar = true;
+        sessionList.SelectedIndexChanged += LoadSelectedSession;
 
         panel.Controls.Add(sessionList);
         panel.Controls.Add(heading);
@@ -145,15 +174,8 @@ public class MainForm : Form
 
     private void SaveSession(object? sender, EventArgs e)
     {
-        var techniques = techniquesInput.Text.Trim();
-        if (string.IsNullOrWhiteSpace(techniques))
+        if (!TryGetTechniques(out var techniques))
         {
-            MessageBox.Show(
-                "Enter at least one technique practised.",
-                "Missing information",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-            techniquesInput.Focus();
             return;
         }
 
@@ -170,7 +192,7 @@ public class MainForm : Form
         try
         {
             dataService.SaveSessions(sessions);
-            sessionList.Items.Add(session.GetSummary());
+            RefreshSessionList();
             ClearForm();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -184,15 +206,170 @@ public class MainForm : Form
         }
     }
 
+    private void UpdateSelectedSession(object? sender, EventArgs e)
+    {
+        if (selectedSessionId is null || !TryGetTechniques(out var techniques))
+        {
+            return;
+        }
+
+        var session = sessions.FirstOrDefault(item => item.Id == selectedSessionId.Value);
+        if (session is null)
+        {
+            return;
+        }
+
+        var previousValues = new
+        {
+            session.SessionDate,
+            session.SessionType,
+            session.DurationMinutes,
+            session.Techniques,
+            session.SparringRounds,
+            session.Notes
+        };
+
+        session.Update(
+            sessionDatePicker.Value.Date,
+            sessionTypeComboBox.SelectedItem?.ToString() ?? "Gi",
+            (int)durationInput.Value,
+            techniques,
+            (int)roundsInput.Value,
+            notesInput.Text.Trim());
+
+        try
+        {
+            dataService.SaveSessions(sessions);
+            RefreshSessionList(session.Id);
+            ClearForm();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            session.Update(
+                previousValues.SessionDate,
+                previousValues.SessionType,
+                previousValues.DurationMinutes,
+                previousValues.Techniques,
+                previousValues.SparringRounds,
+                previousValues.Notes);
+            ShowSaveError(ex);
+        }
+    }
+
+    private void DeleteSelectedSession(object? sender, EventArgs e)
+    {
+        if (selectedSessionId is null)
+        {
+            return;
+        }
+
+        var session = sessions.FirstOrDefault(item => item.Id == selectedSessionId.Value);
+        if (session is null)
+        {
+            return;
+        }
+
+        var confirmation = MessageBox.Show(
+            "Delete the selected training session?",
+            "Confirm deletion",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (confirmation != DialogResult.Yes)
+        {
+            return;
+        }
+
+        sessions.Remove(session);
+        try
+        {
+            dataService.SaveSessions(sessions);
+            RefreshSessionList();
+            ClearForm();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            sessions.Add(session);
+            ShowSaveError(ex);
+        }
+    }
+
+    private void LoadSelectedSession(object? sender, EventArgs e)
+    {
+        if (sessionList.SelectedItem is not TrainingSession session)
+        {
+            selectedSessionId = null;
+            updateButton.Enabled = false;
+            deleteButton.Enabled = false;
+            return;
+        }
+
+        selectedSessionId = session.Id;
+        sessionDatePicker.Value = session.SessionDate;
+        sessionTypeComboBox.SelectedItem = session.SessionType;
+        if (sessionTypeComboBox.SelectedIndex < 0)
+        {
+            sessionTypeComboBox.SelectedIndex = 0;
+        }
+        durationInput.Value = Math.Clamp(
+            session.DurationMinutes,
+            (int)durationInput.Minimum,
+            (int)durationInput.Maximum);
+        roundsInput.Value = Math.Clamp(
+            session.SparringRounds,
+            (int)roundsInput.Minimum,
+            (int)roundsInput.Maximum);
+        techniquesInput.Text = session.Techniques;
+        notesInput.Text = session.Notes;
+        updateButton.Enabled = true;
+        deleteButton.Enabled = true;
+    }
+
+    private bool TryGetTechniques(out string techniques)
+    {
+        techniques = techniquesInput.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(techniques))
+        {
+            return true;
+        }
+
+        MessageBox.Show(
+            "Enter at least one technique practised.",
+            "Missing information",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+        techniquesInput.Focus();
+        return false;
+    }
+
+    private void RefreshSessionList(Guid? sessionIdToSelect = null)
+    {
+        sessionList.Items.Clear();
+        foreach (var session in sessions.OrderByDescending(item => item.SessionDate))
+        {
+            sessionList.Items.Add(session);
+            if (session.Id == sessionIdToSelect)
+            {
+                sessionList.SelectedItem = session;
+            }
+        }
+    }
+
+    private static void ShowSaveError(Exception exception)
+    {
+        MessageBox.Show(
+            "The session changes could not be saved. " + exception.Message,
+            "Save error",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
+    }
+
     private void LoadSavedSessions()
     {
         try
         {
             sessions = dataService.LoadSessions();
-            foreach (var session in sessions.OrderByDescending(item => item.SessionDate))
-            {
-                sessionList.Items.Add(session.GetSummary());
-            }
+            RefreshSessionList();
         }
         catch (JsonException)
         {
@@ -216,6 +393,10 @@ public class MainForm : Form
 
     private void ClearForm()
     {
+        selectedSessionId = null;
+        sessionList.ClearSelected();
+        updateButton.Enabled = false;
+        deleteButton.Enabled = false;
         sessionDatePicker.Value = DateTime.Today;
         sessionTypeComboBox.SelectedIndex = 0;
         durationInput.Value = 60;
