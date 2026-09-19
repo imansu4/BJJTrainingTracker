@@ -15,6 +15,11 @@ public class MainForm : Form
     private readonly ListBox sessionList = new();
     private readonly Button updateButton = new();
     private readonly Button deleteButton = new();
+    private readonly TextBox techniqueSearch = new();
+    private readonly ComboBox typeFilter = new();
+    private readonly DateTimePicker fromDateFilter = new();
+    private readonly DateTimePicker toDateFilter = new();
+    private readonly Label filterStatus = new();
     private readonly JsonDataService dataService = new();
     private List<TrainingSession> sessions = [];
     private Guid? selectedSessionId;
@@ -152,8 +157,71 @@ public class MainForm : Form
         sessionList.SelectedIndexChanged += LoadSelectedSession;
 
         panel.Controls.Add(sessionList);
+        panel.Controls.Add(CreateFilters());
         panel.Controls.Add(heading);
         return panel;
+    }
+
+    private Control CreateFilters()
+    {
+        var filters = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 205,
+            ColumnCount = 2,
+            RowCount = 5,
+            Padding = new Padding(0, 8, 8, 6)
+        };
+        filters.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
+        filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        techniqueSearch.PlaceholderText = "Search techniques";
+        techniqueSearch.Dock = DockStyle.Fill;
+        typeFilter.DropDownStyle = ComboBoxStyle.DropDownList;
+        typeFilter.Items.AddRange(["All types", "Gi", "No-Gi", "Wrestling"]);
+        typeFilter.SelectedIndex = 0;
+        typeFilter.Dock = DockStyle.Fill;
+
+        fromDateFilter.Format = DateTimePickerFormat.Short;
+        fromDateFilter.ShowCheckBox = true;
+        fromDateFilter.Checked = false;
+        fromDateFilter.Dock = DockStyle.Fill;
+        toDateFilter.Format = DateTimePickerFormat.Short;
+        toDateFilter.ShowCheckBox = true;
+        toDateFilter.Checked = false;
+        toDateFilter.Dock = DockStyle.Fill;
+
+        AddFormRow(filters, 0, "Technique", techniqueSearch);
+        AddFormRow(filters, 1, "Type", typeFilter);
+        AddFormRow(filters, 2, "From date", fromDateFilter);
+        AddFormRow(filters, 3, "To date", toDateFilter);
+
+        var clearButton = new Button { Text = "Clear filters", AutoSize = true };
+        clearButton.Click += (_, _) =>
+        {
+            techniqueSearch.Clear();
+            typeFilter.SelectedIndex = 0;
+            fromDateFilter.Checked = false;
+            toDateFilter.Checked = false;
+            RefreshSessionList(selectedSessionId);
+        };
+        filterStatus.AutoSize = true;
+        filterStatus.Anchor = AnchorStyles.Left;
+        var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
+        footer.Controls.Add(clearButton);
+        footer.Controls.Add(filterStatus);
+        filters.Controls.Add(footer, 1, 4);
+
+        techniqueSearch.TextChanged += FilterChanged;
+        typeFilter.SelectedIndexChanged += FilterChanged;
+        fromDateFilter.ValueChanged += FilterChanged;
+        toDateFilter.ValueChanged += FilterChanged;
+        return filters;
+    }
+
+    private void FilterChanged(object? sender, EventArgs e)
+    {
+        RefreshSessionList(selectedSessionId);
     }
 
     private static void AddFormRow(TableLayoutPanel form, int row, string labelText, Control input)
@@ -344,15 +412,46 @@ public class MainForm : Form
 
     private void RefreshSessionList(Guid? sessionIdToSelect = null)
     {
-        sessionList.Items.Clear();
-        foreach (var session in sessions.OrderByDescending(item => item.SessionDate))
+        var validDates = !fromDateFilter.Checked || !toDateFilter.Checked ||
+                         fromDateFilter.Value.Date <= toDateFilter.Value.Date;
+        var search = techniqueSearch.Text.Trim();
+        var type = typeFilter.SelectedItem?.ToString();
+        List<TrainingSession> matching = validDates
+            ? sessions.Where(item =>
+                (string.IsNullOrEmpty(search) || item.Techniques.Contains(search, StringComparison.OrdinalIgnoreCase)) &&
+                (type is null or "All types" || item.SessionType == type) &&
+                (!fromDateFilter.Checked || item.SessionDate.Date >= fromDateFilter.Value.Date) &&
+                (!toDateFilter.Checked || item.SessionDate.Date <= toDateFilter.Value.Date))
+                .OrderByDescending(item => item.SessionDate)
+                .ToList()
+            : [];
+
+        sessionList.BeginUpdate();
+        try
         {
-            sessionList.Items.Add(session);
-            if (session.Id == sessionIdToSelect)
+            sessionList.Items.Clear();
+            foreach (var session in matching)
             {
-                sessionList.SelectedItem = session;
+                sessionList.Items.Add(session);
+            }
+            if (sessionIdToSelect.HasValue)
+            {
+                var selected = matching.FirstOrDefault(item => item.Id == sessionIdToSelect.Value);
+                if (selected is not null) sessionList.SelectedItem = selected;
             }
         }
+        finally
+        {
+            sessionList.EndUpdate();
+        }
+
+        if (sessionIdToSelect.HasValue && sessionList.SelectedItem is null)
+        {
+            ClearForm();
+        }
+        filterStatus.Text = validDates
+            ? $"Showing {matching.Count} of {sessions.Count}"
+            : "From date must be before to date";
     }
 
     private static void ShowSaveError(Exception exception)
