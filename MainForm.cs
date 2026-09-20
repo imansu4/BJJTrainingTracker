@@ -20,6 +20,8 @@ public class MainForm : Form
     private readonly DateTimePicker fromDateFilter = new();
     private readonly DateTimePicker toDateFilter = new();
     private readonly Label filterStatus = new();
+    private readonly DateTimePicker weekPicker = new();
+    private readonly Label weekSummary = new();
     private readonly JsonDataService dataService = new();
     private List<TrainingSession> sessions = [];
     private Guid? selectedSessionId;
@@ -158,8 +160,47 @@ public class MainForm : Form
 
         panel.Controls.Add(sessionList);
         panel.Controls.Add(CreateFilters());
+        panel.Controls.Add(CreateWeeklySummary());
         panel.Controls.Add(heading);
         return panel;
+    }
+
+    private Control CreateWeeklySummary()
+    {
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 112,
+            ColumnCount = 2,
+            RowCount = 2,
+            Padding = new Padding(0, 4, 8, 8)
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        weekPicker.Format = DateTimePickerFormat.Short;
+        weekPicker.Dock = DockStyle.Fill;
+        weekPicker.ValueChanged += (_, _) => RefreshWeeklySummary();
+        AddFormRow(panel, 0, "Week of", weekPicker);
+
+        weekSummary.Dock = DockStyle.Fill;
+        weekSummary.TextAlign = ContentAlignment.MiddleLeft;
+        weekSummary.Margin = new Padding(3, 3, 3, 3);
+        panel.Controls.Add(weekSummary, 1, 1);
+        return panel;
+    }
+
+    private void RefreshWeeklySummary()
+    {
+        var selectedDate = weekPicker.Value.Date;
+        var monday = selectedDate.AddDays(-(((int)selectedDate.DayOfWeek + 6) % 7));
+        var sunday = monday.AddDays(6);
+        var weekSessions = sessions.Where(session =>
+            session.SessionDate.Date >= monday && session.SessionDate.Date <= sunday).ToList();
+
+        weekSummary.Text = $"{monday:dd MMM yyyy} – {sunday:dd MMM yyyy}\n" +
+            $"{weekSessions.Count} sessions  |  {weekSessions.Sum(session => session.DurationMinutes)} min  |  " +
+            $"{weekSessions.Sum(session => session.SparringRounds)} rounds";
     }
 
     private Control CreateFilters()
@@ -452,6 +493,7 @@ public class MainForm : Form
         filterStatus.Text = validDates
             ? $"Showing {matching.Count} of {sessions.Count}"
             : "From date must be before to date";
+        RefreshWeeklySummary();
     }
 
     private static void ShowSaveError(Exception exception)
@@ -487,6 +529,10 @@ public class MainForm : Form
                 "Load error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            RefreshWeeklySummary();
         }
     }
 
