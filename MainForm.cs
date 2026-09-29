@@ -22,8 +22,12 @@ public class MainForm : Form
     private readonly Label filterStatus = new();
     private readonly DateTimePicker weekPicker = new();
     private readonly Label weekSummary = new();
+    private readonly TextBox focusNameInput = new();
+    private readonly ListBox activeFocusList = new();
+    private readonly ListBox completedFocusList = new();
     private readonly JsonDataService dataService = new();
     private List<TrainingSession> sessions = [];
+    private List<FocusArea> focusAreas = [];
     private Guid? selectedSessionId;
 
     public MainForm()
@@ -52,10 +56,113 @@ public class MainForm : Form
         content.Panel1.Controls.Add(CreateSessionForm());
         content.Panel2.Controls.Add(CreateSessionList());
 
-        Controls.Add(content);
+        var sessionsPage = new TabPage("Training sessions");
+        sessionsPage.Controls.Add(content);
+
+        var focusPage = new TabPage("Focus areas");
+        focusPage.Controls.Add(CreateFocusAreaPage());
+
+        var tabs = new TabControl { Dock = DockStyle.Fill };
+        tabs.TabPages.Add(sessionsPage);
+        tabs.TabPages.Add(focusPage);
+
+        Controls.Add(tabs);
         Controls.Add(titleLabel);
 
         LoadSavedSessions();
+        LoadSavedFocusAreas();
+    }
+
+    private Control CreateFocusAreaPage()
+    {
+        var page = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 3,
+            Padding = new Padding(20)
+        };
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        focusNameInput.PlaceholderText = "Example: Improve half guard retention";
+        focusNameInput.Width = 420;
+
+        var addButton = new Button
+        {
+            Text = "Add Focus Area",
+            AutoSize = true,
+            Padding = new Padding(10, 5, 10, 5)
+        };
+        addButton.Click += AddFocusArea;
+
+        var inputPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            Padding = new Padding(0, 0, 0, 12)
+        };
+        inputPanel.Controls.Add(focusNameInput);
+        inputPanel.Controls.Add(addButton);
+        page.Controls.Add(inputPanel, 0, 0);
+        page.SetColumnSpan(inputPanel, 2);
+
+        activeFocusList.Dock = DockStyle.Fill;
+        activeFocusList.SelectedIndexChanged += (_, _) =>
+        {
+            if (activeFocusList.SelectedItem is not null)
+            {
+                completedFocusList.ClearSelected();
+            }
+        };
+        completedFocusList.Dock = DockStyle.Fill;
+        completedFocusList.SelectedIndexChanged += (_, _) =>
+        {
+            if (completedFocusList.SelectedItem is not null)
+            {
+                activeFocusList.ClearSelected();
+            }
+        };
+
+        page.Controls.Add(CreateFocusGroup("Active focus areas", activeFocusList), 0, 1);
+        page.Controls.Add(CreateFocusGroup("Completed focus areas", completedFocusList), 1, 1);
+
+        var completeButton = new Button { Text = "Mark Completed", AutoSize = true };
+        completeButton.Click += CompleteFocusArea;
+        var reopenButton = new Button { Text = "Move Back to Active", AutoSize = true };
+        reopenButton.Click += ReopenFocusArea;
+        var deleteFocusButton = new Button { Text = "Delete Selected", AutoSize = true };
+        deleteFocusButton.Click += DeleteFocusArea;
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            Padding = new Padding(0, 12, 0, 0)
+        };
+        actions.Controls.Add(completeButton);
+        actions.Controls.Add(reopenButton);
+        actions.Controls.Add(deleteFocusButton);
+        page.Controls.Add(actions, 0, 2);
+        page.SetColumnSpan(actions, 2);
+
+        return page;
+    }
+
+    private static Control CreateFocusGroup(string title, ListBox list)
+    {
+        var group = new GroupBox
+        {
+            Text = title,
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10),
+            Margin = new Padding(5)
+        };
+        group.Controls.Add(list);
+        return group;
     }
 
     private Control CreateSessionForm()
@@ -503,6 +610,179 @@ public class MainForm : Form
             "Save error",
             MessageBoxButtons.OK,
             MessageBoxIcon.Error);
+    }
+
+    private void AddFocusArea(object? sender, EventArgs e)
+    {
+        var name = focusNameInput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            MessageBox.Show(
+                "Enter a focus area before adding it.",
+                "Missing information",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            focusNameInput.Focus();
+            return;
+        }
+
+        if (focusAreas.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(
+                "That focus area already exists.",
+                "Duplicate focus area",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var focusArea = new FocusArea(name);
+        focusAreas.Add(focusArea);
+        if (TrySaveFocusAreas())
+        {
+            focusNameInput.Clear();
+            RefreshFocusAreaLists();
+        }
+        else
+        {
+            focusAreas.Remove(focusArea);
+        }
+    }
+
+    private void CompleteFocusArea(object? sender, EventArgs e)
+    {
+        if (activeFocusList.SelectedItem is not FocusArea focusArea)
+        {
+            MessageBox.Show("Select an active focus area first.", "Nothing selected");
+            return;
+        }
+
+        focusArea.MarkCompleted();
+        if (TrySaveFocusAreas())
+        {
+            RefreshFocusAreaLists();
+        }
+        else
+        {
+            focusArea.Reopen();
+        }
+    }
+
+    private void ReopenFocusArea(object? sender, EventArgs e)
+    {
+        if (completedFocusList.SelectedItem is not FocusArea focusArea)
+        {
+            MessageBox.Show("Select a completed focus area first.", "Nothing selected");
+            return;
+        }
+
+        focusArea.Reopen();
+        if (TrySaveFocusAreas())
+        {
+            RefreshFocusAreaLists();
+        }
+        else
+        {
+            focusArea.MarkCompleted();
+        }
+    }
+
+    private void DeleteFocusArea(object? sender, EventArgs e)
+    {
+        var focusArea = activeFocusList.SelectedItem as FocusArea ??
+                        completedFocusList.SelectedItem as FocusArea;
+        if (focusArea is null)
+        {
+            MessageBox.Show("Select a focus area first.", "Nothing selected");
+            return;
+        }
+
+        var confirmation = MessageBox.Show(
+            $"Delete '{focusArea.Name}'?",
+            "Confirm deletion",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+        if (confirmation != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var index = focusAreas.IndexOf(focusArea);
+        focusAreas.Remove(focusArea);
+        if (TrySaveFocusAreas())
+        {
+            RefreshFocusAreaLists();
+        }
+        else
+        {
+            focusAreas.Insert(index, focusArea);
+        }
+    }
+
+    private bool TrySaveFocusAreas()
+    {
+        try
+        {
+            dataService.SaveFocusAreas(focusAreas);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(
+                "The focus areas could not be saved. " + ex.Message,
+                "Save error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return false;
+        }
+    }
+
+    private void LoadSavedFocusAreas()
+    {
+        try
+        {
+            focusAreas = dataService.LoadFocusAreas();
+        }
+        catch (JsonException)
+        {
+            focusAreas = [];
+            MessageBox.Show(
+                "The saved focus-area data could not be read because the file is invalid.",
+                "Data error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            focusAreas = [];
+            MessageBox.Show(
+                "The saved focus areas could not be loaded. " + ex.Message,
+                "Load error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            RefreshFocusAreaLists();
+        }
+    }
+
+    private void RefreshFocusAreaLists()
+    {
+        activeFocusList.Items.Clear();
+        completedFocusList.Items.Clear();
+
+        foreach (var focusArea in focusAreas.OrderBy(item => item.CreatedAt))
+        {
+            if (focusArea.IsCompleted)
+            {
+                completedFocusList.Items.Add(focusArea);
+            }
+            else
+            {
+                activeFocusList.Items.Add(focusArea);
+            }
+        }
     }
 
     private void LoadSavedSessions()

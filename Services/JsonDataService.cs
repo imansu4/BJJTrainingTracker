@@ -5,7 +5,8 @@ namespace BJJTrainingTracker.Services;
 
 public class JsonDataService
 {
-    private readonly string filePath;
+    private readonly string sessionsFilePath;
+    private readonly string focusAreasFilePath;
     private readonly JsonSerializerOptions options = new()
     {
         WriteIndented = true
@@ -14,29 +15,50 @@ public class JsonDataService
     public JsonDataService()
     {
         var dataFolder = Path.Combine(AppContext.BaseDirectory, "Data");
-        filePath = Path.Combine(dataFolder, "trainingData.json");
+        sessionsFilePath = Path.Combine(dataFolder, "trainingData.json");
+        focusAreasFilePath = Path.Combine(dataFolder, "focusAreas.json");
     }
 
     public List<TrainingSession> LoadSessions()
     {
-        if (!File.Exists(filePath))
-        {
-            return [];
-        }
-
-        var json = File.ReadAllText(filePath);
-        return JsonSerializer.Deserialize<List<TrainingSession>>(json, options) ?? [];
+        return LoadList<TrainingSession>(sessionsFilePath);
     }
 
     public void SaveSessions(List<TrainingSession> sessions)
     {
-        var directory = Path.GetDirectoryName(filePath);
+        SaveList(sessionsFilePath, sessions);
+    }
+
+    public List<FocusArea> LoadFocusAreas()
+    {
+        return LoadList<FocusArea>(focusAreasFilePath);
+    }
+
+    public void SaveFocusAreas(List<FocusArea> focusAreas)
+    {
+        SaveList(focusAreasFilePath, focusAreas);
+    }
+
+    private List<T> LoadList<T>(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
+        var json = File.ReadAllText(path);
+        return JsonSerializer.Deserialize<List<T>>(json, options) ?? [];
+    }
+
+    private void SaveList<T>(string path, List<T> items)
+    {
+        var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
-        var json = JsonSerializer.Serialize(sessions, options);
-        File.WriteAllText(filePath, json);
+        var json = JsonSerializer.Serialize(items, options);
+        File.WriteAllText(path, json);
     }
 }

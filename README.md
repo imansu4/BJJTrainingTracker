@@ -14,17 +14,15 @@ BJJ Training Tracker is a C# Windows Forms application for recording training se
 - Sessions can be deleted after a confirmation prompt
 - Search saved sessions by technique and filter by type and date range
 - Select a week to see total sessions, training minutes and sparring rounds
+- Add training focus areas and separate them into active and completed lists
+- Reopen or delete saved focus areas
 - File access and invalid JSON errors are handled with clear messages
 - `TrainingSession` class extends the abstract `TrainingEntry` base class
 - Git and GitHub development workflow started
 
-## Planned features
-
-- Manage active focus areas
-
 ## Running the project
 
-1. Open `BJJTrainingTracker.csproj` in Microsoft Visual Studio 2022.
+1. Open `BJJTrainingTracker.sln` in Microsoft Visual Studio 2022.
 2. Ensure the .NET 8 desktop development workload is installed.
 3. Press **F5** to build and run the application.
 
