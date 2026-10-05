@@ -34,8 +34,13 @@ public class FocusArea
 
     public void MarkCompleted()
     {
+        MarkCompleted(DateTime.Now);
+    }
+
+    public void MarkCompleted(DateTime completedAt)
+    {
         IsCompleted = true;
-        CompletedAt = DateTime.Now;
+        CompletedAt = completedAt;
     }
 
     public void Reopen()

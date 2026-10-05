@@ -90,6 +90,7 @@ public class MainForm : Form
 
         focusNameInput.PlaceholderText = "Example: Improve half guard retention";
         focusNameInput.Width = 420;
+        focusNameInput.MaxLength = 100;
 
         var addButton = new Button
         {
@@ -197,11 +198,13 @@ public class MainForm : Form
         roundsInput.Width = 220;
 
         techniquesInput.Width = 250;
+        techniquesInput.MaxLength = 200;
         techniquesInput.PlaceholderText = "Example: half guard, armbar";
 
         notesInput.Multiline = true;
         notesInput.Height = 100;
         notesInput.Width = 250;
+        notesInput.MaxLength = 1000;
         notesInput.ScrollBars = ScrollBars.Vertical;
 
         AddFormRow(form, 0, "Session date", sessionDatePicker);
@@ -234,6 +237,15 @@ public class MainForm : Form
         deleteButton.Enabled = false;
         deleteButton.Click += DeleteSelectedSession;
 
+        var clearButton = new Button
+        {
+            Text = "Clear Form",
+            AutoSize = true,
+            Padding = new Padding(12, 6, 12, 6),
+            Margin = new Padding(3)
+        };
+        clearButton.Click += (_, _) => ClearForm();
+
         var buttonPanel = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -244,6 +256,7 @@ public class MainForm : Form
         buttonPanel.Controls.Add(saveButton);
         buttonPanel.Controls.Add(updateButton);
         buttonPanel.Controls.Add(deleteButton);
+        buttonPanel.Controls.Add(clearButton);
         form.Controls.Add(buttonPanel, 1, 6);
 
         return form;
@@ -468,6 +481,7 @@ public class MainForm : Form
                 previousValues.Techniques,
                 previousValues.SparringRounds,
                 previousValues.Notes);
+            RefreshSessionList(session.Id);
             ShowSaveError(ex);
         }
     }
@@ -676,14 +690,15 @@ public class MainForm : Form
             return;
         }
 
+        var previousCompletedAt = focusArea.CompletedAt;
         focusArea.Reopen();
         if (TrySaveFocusAreas())
         {
             RefreshFocusAreaLists();
         }
-        else
+        else if (previousCompletedAt.HasValue)
         {
-            focusArea.MarkCompleted();
+            focusArea.MarkCompleted(previousCompletedAt.Value);
         }
     }
 

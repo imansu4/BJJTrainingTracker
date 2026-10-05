@@ -59,6 +59,18 @@ public class JsonDataService
         }
 
         var json = JsonSerializer.Serialize(items, options);
-        File.WriteAllText(path, json);
+        var temporaryPath = path + ".tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, json);
+            File.Move(temporaryPath, path, true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 }
