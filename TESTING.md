@@ -1,6 +1,5 @@
 # Manual Testing Guide
 
-Run these checks in Visual Studio before the live presentation.
 
 | Area | Test | Expected result |
 | --- | --- | --- |
@@ -15,5 +14,3 @@ Run these checks in Visual Studio before the live presentation.
 | Focus-area workflow | Add, complete, reopen and delete a focus area | The item moves between the correct lists and deletion requires confirmation |
 | Focus-area storage | Add and complete focus areas, then restart the program | Active and completed states are restored from JSON |
 | Damaged data | Temporarily replace a data file with invalid JSON | The program shows a data warning instead of closing unexpectedly |
-
-The generated data files are stored in the application's output `Data` folder. Restore or remove any deliberately damaged test file after testing.
